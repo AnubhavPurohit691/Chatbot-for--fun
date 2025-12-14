@@ -3,12 +3,13 @@ import { MessagesAnnotation, StateGraph } from "@langchain/langgraph"
 import { ToolNode } from "@langchain/langgraph/prebuilt"
 import { TavilySearch } from "@langchain/tavily"
 import readline from "node:readline/promises"
-
+import { MemorySaver } from "@langchain/langgraph"
+import { threadId } from "node:worker_threads"
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 })
-
+const checkpointer = new MemorySaver()
 const tool = new TavilySearch({
   maxResults: 3,
   topic: "general"
@@ -44,14 +45,19 @@ const graph = new StateGraph(MessagesAnnotation)
     }
   )
   .addEdge("tool", "mock_llm")
-  .compile()
+  .compile({ checkpointer })
 
 
 async function main() {
-  const msg = await rl.question(" what can i help you : ")
-  const finalstate: any = await graph.invoke({ messages: [{ role: "human", content: msg }] })
-  console.log(finalstate.messages[finalstate.messages.length - 1].content)
-  console.log(finalstate.messages)
+  while (true) {
+    const msg = await rl.question(" what can i help you : ")
+
+    if (msg == "/end") break;
+    const finalstate: any = await graph.invoke({ messages: [{ role: "human", content: msg }] }, { configurable: { thread_id: "1" } })
+    console.log(finalstate.messages[finalstate.messages.length - 1].content)
+    console.log(finalstate.messages)
+  }
+
   rl.close()
 }
 
